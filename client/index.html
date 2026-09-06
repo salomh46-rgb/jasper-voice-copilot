@@ -135,12 +135,12 @@
           <div class="flex items-center space-x-2">
             <span id="liveStatusBadge" class="px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 flex items-center space-x-2">
               <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-              <span id="liveStatusText">Doimiy tinglashga tayyor</span>
+              <span id="liveStatusText">Ovozli boshqaruv tayyor</span>
             </span>
           </div>
           <!-- Auto Listening Mode Toggle -->
           <div class="flex items-center space-x-2">
-            <span class="text-xs text-slate-300 font-medium">Hands-free (Doimiy):</span>
+            <span class="text-xs text-slate-300 font-medium">Doimiy tinglash:</span>
             <button id="toggleHandsFree" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-500 text-black shadow-md shadow-cyan-500/30 transition-all">
               YOQILGAN
             </button>
@@ -154,7 +154,7 @@
           
           <button id="micBtn" class="relative z-20 w-36 h-36 rounded-full bg-gradient-to-tr from-[#090d1a] to-[#121c38] border-2 border-cyan-400 flex flex-col items-center justify-center text-cyan-400 hover:text-cyan-300 hover:border-cyan-300 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-cyan-500/20 group">
             <i id="micIcon" class="fa-solid fa-microphone text-4xl mb-2 group-hover:scale-110 transition-transform"></i>
-            <span id="micLabel" class="text-[11px] font-mono tracking-widest uppercase font-bold">TINGLASH</span>
+            <span id="micLabel" class="text-[11px] font-mono tracking-widest uppercase font-bold">GAPIRISH</span>
           </button>
         </div>
 
@@ -170,10 +170,15 @@
 
         <!-- Live Speech Recognition Feedback -->
         <div class="w-full max-w-lg mt-4 text-center z-10">
-          <p id="liveTranscript" class="text-slate-300 text-base font-medium italic min-h-[28px]">
-            «Mikrofon tugmasini bosing yoki bemalol o‘zbekcha gapiring...»
+          <p id="liveTranscript" class="text-slate-200 text-base font-medium italic min-h-[28px]">
+            «Mikrofonni bosing yoki bemalol o‘zbekcha gapiring...»
           </p>
           <p id="aiResponseText" class="text-cyan-400 text-sm font-semibold mt-2 min-h-[22px]"></p>
+        </div>
+
+        <div class="mt-4 text-[11px] text-slate-400 z-10 flex items-center space-x-2">
+          <span class="px-2 py-0.5 rounded bg-white/10 text-slate-300 font-mono">Maslahat:</span>
+          <span>Ekran karnayi ovozini mikrofonga qaytmasligi uchun ovozni o'rtacha balandlikda tuting.</span>
         </div>
       </div>
 
@@ -264,7 +269,7 @@
   </main>
 
   <!-- Audio Player (Hidden) -->
-  <audio id="ttsAudio" class="hidden"></audio>
+  <audio id="ttsAudio" class="hidden" preload="auto"></audio>
 
   <!-- Client Logic -->
   <script>
@@ -273,6 +278,8 @@
     let isSpeaking = false;
     let handsFreeMode = true;
     let recognition = null;
+    let lastProcessedText = '';
+    let lastProcessedTime = 0;
     const ttsAudio = document.getElementById('ttsAudio');
 
     // UI Elements
@@ -297,11 +304,25 @@
         toggleHandsFree.className = 'px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-500 text-black shadow-md shadow-cyan-500/30 transition-all';
         startListening();
       } else {
-        toggleHandsFree.textContent = 'O\'CHIRILGAN';
+        toggleHandsFree.textContent = "O'CHIRILGAN";
         toggleHandsFree.className = 'px-2.5 py-1 rounded-lg text-xs font-bold bg-white/10 text-slate-300 hover:bg-white/20 transition-all';
         stopListening();
       }
     });
+
+    // Clean and validate voice text
+    function isJunkOrEcho(text) {
+      if (!text || text.trim().length < 2) return true;
+      const clean = text.trim();
+      // Filter out pure numbers or short noise like '030', '30224030'
+      if (/^[0-9\s,.-]+$/.test(clean)) return true;
+      // Filter out duplicate triggers within 2.5 seconds
+      const now = Date.now();
+      if (clean.toLowerCase() === lastProcessedText.toLowerCase() && (now - lastProcessedTime) < 2500) {
+        return true;
+      }
+      return false;
+    }
 
     // Speech Recognition Setup
     function initSpeechRecognition() {
@@ -319,21 +340,32 @@
 
       recognition.onstart = () => {
         isListening = true;
-        updateUIState('listening');
+        if (!isSpeaking) {
+          updateUIState('listening');
+        }
       };
 
       recognition.onresult = (event) => {
-        if (isSpeaking) return; // Don't transcribe when AI is speaking
+        if (isSpeaking) {
+          console.log('Ignored utterance during speech playback');
+          return;
+        }
         const lastIndex = event.results.length - 1;
-        const text = event.results[lastIndex][0].transcript.trim();
-        if (text) {
+        const rawText = event.results[lastIndex][0].transcript;
+        const text = rawText ? rawText.trim() : '';
+        
+        if (text && !isJunkOrEcho(text)) {
+          lastProcessedText = text;
+          lastProcessedTime = Date.now();
           liveTranscript.textContent = `«${text}»`;
           processVoiceCommand(text);
+        } else {
+          console.log('Filtered noise/echo:', text);
         }
       };
 
       recognition.onerror = (event) => {
-        console.warn('Speech recognition error:', event.error);
+        console.warn('Speech recognition event:', event.error);
         if (event.error === 'not-allowed') {
           liveTranscript.textContent = "Mikrofonga ruxsat berilmadi. Iltimos brauzerda ruxsat bering.";
           updateUIState('idle');
@@ -344,12 +376,11 @@
       recognition.onend = () => {
         isListening = false;
         if (handsFreeMode && !isSpeaking) {
-          // Immediately restart for continuous hands-free listening
           setTimeout(() => {
-            try {
-              if (handsFreeMode && !isSpeaking) recognition.start();
-            } catch (e) {}
-          }, 300);
+            if (handsFreeMode && !isSpeaking) {
+              try { recognition.start(); } catch (e) {}
+            }
+          }, 350);
         } else if (!isSpeaking) {
           updateUIState('idle');
         }
@@ -357,23 +388,31 @@
     }
 
     function startListening() {
+      if (isSpeaking) return;
       if (!recognition) initSpeechRecognition();
       try {
         recognition.start();
-      } catch (e) {
-        // already started
-      }
+      } catch (e) {}
     }
 
     function stopListening() {
       if (recognition) {
-        try { recognition.stop(); } catch(e){}
+        try { recognition.abort(); } catch(e){}
       }
       isListening = false;
       updateUIState('idle');
     }
 
     micBtn.addEventListener('click', () => {
+      if (isSpeaking) {
+        // Stop current audio playback immediately
+        ttsAudio.pause();
+        ttsAudio.currentTime = 0;
+        isSpeaking = false;
+        startListening();
+        return;
+      }
+
       if (isListening) {
         handsFreeMode = false;
         toggleHandsFree.textContent = "O'CHIRILGAN";
@@ -398,7 +437,7 @@
         liveStatusText.textContent = 'Doimiy tinglamoqda (Gapiring...)';
         liveStatusBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center space-x-2';
       } else if (state === 'speaking') {
-        micIcon.className = 'fa-solid fa-volume-high text-4xl mb-2 text-purple-300';
+        micIcon.className = 'fa-solid fa-volume-high text-4xl mb-2 text-purple-300 animate-bounce';
         micLabel.textContent = 'JAVOB BERMOQDA';
         pulseCircle.className = 'absolute w-56 h-56 rounded-full border border-purple-400 pulse-ring-active';
         outerCircle.className = 'absolute w-48 h-48 rounded-full bg-purple-500/20 blur-xl';
@@ -407,7 +446,7 @@
         liveStatusBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center space-x-2';
       } else {
         micIcon.className = 'fa-solid fa-microphone text-4xl mb-2 text-cyan-400';
-        micLabel.textContent = 'TINGLASH';
+        micLabel.textContent = 'GAPIRISH';
         pulseCircle.className = 'absolute w-56 h-56 rounded-full border border-cyan-400/30';
         outerCircle.className = 'absolute w-48 h-48 rounded-full bg-cyan-500/10 blur-xl';
         waveform.style.opacity = '0.3';
@@ -430,11 +469,10 @@
         if (data.success) {
           aiResponseText.textContent = data.speech_response;
           
-          // Play Ultra-Realistic Neural Audio
+          // Play Ultra-Realistic Neural Audio with Anti-Feedback Muting
           if (data.audio_base64) {
             playNeuralAudio(data.audio_base64);
           } else {
-            // Fallback to browser TTS if server audio failed
             speakWithBrowser(data.speech_response);
           }
           fetchHistory();
@@ -450,18 +488,28 @@
       isSpeaking = true;
       updateUIState('speaking');
       
+      // Stop recognition IMMEDIATELY to prevent mic hearing speaker output!
+      if (recognition) {
+        try { recognition.abort(); } catch(e){}
+      }
+      
       ttsAudio.src = `data:audio/mp3;base64,${base64Data}`;
       ttsAudio.play().catch(e => {
         console.warn('Audio play autoplay restriction:', e);
+        isSpeaking = false;
+        if (handsFreeMode) startListening();
       });
 
       ttsAudio.onended = () => {
         isSpeaking = false;
-        if (handsFreeMode) {
-          startListening();
-        } else {
-          updateUIState('idle');
-        }
+        // Wait 500ms debounce buffer so room echo dissipates before mic restarts
+        setTimeout(() => {
+          if (handsFreeMode && !isSpeaking) {
+            startListening();
+          } else {
+            updateUIState('idle');
+          }
+        }, 500);
       };
     }
 
@@ -470,6 +518,10 @@
       isSpeaking = true;
       updateUIState('speaking');
       
+      if (recognition) {
+        try { recognition.abort(); } catch(e){}
+      }
+
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = 'uz-UZ';
@@ -478,11 +530,10 @@
       
       utter.onend = () => {
         isSpeaking = false;
-        if (handsFreeMode) {
-          startListening();
-        } else {
-          updateUIState('idle');
-        }
+        setTimeout(() => {
+          if (handsFreeMode && !isSpeaking) startListening();
+          else updateUIState('idle');
+        }, 500);
       };
       utter.onerror = () => {
         isSpeaking = false;
