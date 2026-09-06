@@ -8,7 +8,6 @@ from typing import Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import edge_tts
 
@@ -17,8 +16,8 @@ from server.system_actions import SystemActionExecutor
 
 app = FastAPI(
     title="Jasper AI — Live Voice Copilot Desktop & Web Engine",
-    version="2.0.0",
-    description="Live Uzbek Voice-Controlled Desktop Assistant with Neural Human-like Speech and Zero-Click Continuous Listening."
+    version="2.1.0",
+    description="Live Uzbek Voice-Controlled Desktop Assistant with Cyrillic/Latin Uzbek NLP, Math Engine and Neural Human Voices."
 )
 
 app.add_middleware(
@@ -70,6 +69,7 @@ class VoiceInputRequest(BaseModel):
     text: str
     language: Optional[str] = "uz-UZ"
     voice: Optional[str] = DEFAULT_VOICE
+    api_key: Optional[str] = None
 
 @app.get("/")
 def serve_index():
@@ -78,7 +78,7 @@ def serve_index():
         return FileResponse(index_path)
     return {
         "status": "active",
-        "service": "Jasper AI — Live Voice Copilot 2.0"
+        "service": "Jasper AI — Live Voice Copilot 2.1"
     }
 
 @app.post("/api/voice/process")
@@ -86,7 +86,7 @@ async def process_voice_command(req: VoiceInputRequest):
     if not req.text or not req.text.strip():
         raise HTTPException(status_code=400, detail="Voice text is empty")
 
-    res = engine.parse_and_execute(req.text)
+    res = engine.parse_and_execute(req.text, custom_api_key=req.api_key)
     speech_text = res["speech_response"]
     
     # Generate ultra-realistic neural human speech

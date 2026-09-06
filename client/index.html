@@ -89,7 +89,7 @@
         <div>
           <div class="flex items-center space-x-2">
             <span class="font-black text-lg tracking-wider font-mono">JASPER <span class="neon-text">COPILOT</span></span>
-            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">JARVIS 2.0</span>
+            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">JARVIS 2.1</span>
           </div>
           <p class="text-[11px] text-slate-400">O'zbekcha Jonli Ovozli Kompyuter Boshqaruvi</p>
         </div>
@@ -101,9 +101,9 @@
         <div class="hidden sm:flex items-center space-x-2 bg-white/5 border border-white/10 px-2.5 py-1 rounded-xl">
           <i class="fa-solid fa-wand-magic-sparkles text-cyan-400"></i>
           <select id="voiceSelect" class="bg-transparent text-slate-200 text-xs focus:outline-none cursor-pointer">
-            <option value="uz-UZ-SardorNeural" class="bg-slate-900 text-white">🎙️ Sardor (O'zbekcha Erkak / Tabiiy Ovoz)</option>
-            <option value="uz-UZ-MadinaNeural" class="bg-slate-900 text-white">🎙️ Madina (O'zbekcha Ayol / Tabiiy Ovoz)</option>
-            <option value="ru-RU-DmitryNeural" class="bg-slate-900 text-white">🎙️ Dmitry (Ruscha / Tabiiy Ovoz)</option>
+            <option value="uz-UZ-SardorNeural" class="bg-slate-900 text-white">🎙️ Sardor (Erkak / Tabiiy Ovoz)</option>
+            <option value="uz-UZ-MadinaNeural" class="bg-slate-900 text-white">🎙️ Madina (Ayol / Tabiiy Ovoz)</option>
+            <option value="ru-RU-DmitryNeural" class="bg-slate-900 text-white">🎙️ Dmitry (Ruscha Ovoz)</option>
           </select>
         </div>
 
@@ -148,7 +148,7 @@
         </div>
 
         <!-- Voice Activation Big Button -->
-        <div class="relative my-6 flex items-center justify-center">
+        <div class="relative my-4 flex items-center justify-center">
           <div id="pulseCircle" class="absolute w-56 h-56 rounded-full border border-cyan-400/30 pointer-events-none transition-all duration-500"></div>
           <div id="outerCircle" class="absolute w-48 h-48 rounded-full bg-cyan-500/10 blur-xl pointer-events-none transition-all duration-500"></div>
           
@@ -159,7 +159,7 @@
         </div>
 
         <!-- Live Waveform Visualizer -->
-        <div id="waveform" class="flex items-center space-x-1.5 h-12 my-2 opacity-30 transition-opacity duration-300">
+        <div id="waveform" class="flex items-center space-x-1.5 h-10 my-1 opacity-30 transition-opacity duration-300">
           <div class="wave-bar"></div>
           <div class="wave-bar"></div>
           <div class="wave-bar"></div>
@@ -168,17 +168,20 @@
           <div class="wave-bar"></div>
         </div>
 
-        <!-- Live Speech Recognition Feedback -->
-        <div class="w-full max-w-lg mt-4 text-center z-10">
+        <!-- Live Speech Recognition Feedback & Interactive Input -->
+        <div class="w-full max-w-lg mt-2 text-center z-10">
           <p id="liveTranscript" class="text-slate-200 text-base font-medium italic min-h-[28px]">
             «Mikrofonni bosing yoki bemalol o‘zbekcha gapiring...»
           </p>
-          <p id="aiResponseText" class="text-cyan-400 text-sm font-semibold mt-2 min-h-[22px]"></p>
-        </div>
-
-        <div class="mt-4 text-[11px] text-slate-400 z-10 flex items-center space-x-2">
-          <span class="px-2 py-0.5 rounded bg-white/10 text-slate-300 font-mono">Maslahat:</span>
-          <span>Ekran karnayi ovozini mikrofonga qaytmasligi uchun ovozni o'rtacha balandlikda tuting.</span>
+          <p id="aiResponseText" class="text-cyan-400 text-sm font-semibold mt-1 min-h-[22px]"></p>
+          
+          <!-- Direct Input & Correction Bar -->
+          <form onsubmit="handleManualSubmit(event)" class="mt-4 flex items-center bg-white/5 border border-white/10 rounded-2xl p-1.5 focus-within:border-cyan-400 transition-all">
+            <input id="manualInput" type="text" placeholder="Yoki yozib buyruq bering (masalan: 50 ni 4 ga ko'paytir, Telegramni och)..." class="bg-transparent flex-1 px-3 text-xs text-white placeholder-slate-500 focus:outline-none" />
+            <button type="submit" class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-black font-bold rounded-xl text-xs hover:opacity-90 transition-opacity">
+              <i class="fa-solid fa-paper-plane mr-1"></i> Jo'natish
+            </button>
+          </form>
         </div>
       </div>
 
@@ -189,13 +192,17 @@
           <span>Tezkor Buyruqlar (Bosish yoki Ovoz orqali):</span>
         </h3>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <button onclick="executeQuick('Telegramni och')" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 hover:border-cyan-400 border border-white/10 text-left transition-all text-xs flex items-center space-x-2">
+            <i class="fa-brands fa-telegram text-blue-400"></i>
+            <span>Telegram</span>
+          </button>
           <button onclick="executeQuick('Kalkulyatorni och')" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 hover:border-cyan-400 border border-white/10 text-left transition-all text-xs flex items-center space-x-2">
             <i class="fa-solid fa-calculator text-cyan-400"></i>
             <span>Kalkulyator</span>
           </button>
-          <button onclick="executeQuick('Telegramni och')" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 hover:border-cyan-400 border border-white/10 text-left transition-all text-xs flex items-center space-x-2">
-            <i class="fa-brands fa-telegram text-blue-400"></i>
-            <span>Telegram</span>
+          <button onclick="executeQuick('50 ni 4 ga ko'paytir')" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 hover:border-cyan-400 border border-white/10 text-left transition-all text-xs flex items-center space-x-2">
+            <i class="fa-solid fa-calculator text-amber-400"></i>
+            <span>Hisoblash (50*4)</span>
           </button>
           <button onclick="executeQuick('Bloknotni och')" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 hover:border-cyan-400 border border-white/10 text-left transition-all text-xs flex items-center space-x-2">
             <i class="fa-solid fa-file-lines text-emerald-400"></i>
@@ -208,10 +215,6 @@
           <button onclick="executeQuick('GitHub profilimni och')" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 hover:border-cyan-400 border border-white/10 text-left transition-all text-xs flex items-center space-x-2">
             <i class="fa-brands fa-github text-purple-400"></i>
             <span>GitHub Profil</span>
-          </button>
-          <button onclick="executeQuick('ChatGPT-ni och')" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 hover:border-cyan-400 border border-white/10 text-left transition-all text-xs flex items-center space-x-2">
-            <i class="fa-solid fa-robot text-teal-400"></i>
-            <span>ChatGPT</span>
           </button>
           <button onclick="executeQuick('C diskda qancha joy bor?')" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-cyan-500/20 hover:border-cyan-400 border border-white/10 text-left transition-all text-xs flex items-center space-x-2">
             <i class="fa-solid fa-hard-drive text-cyan-400"></i>
@@ -273,7 +276,7 @@
 
   <!-- Client Logic -->
   <script>
-    const API_BASE = 'http://127.0.0.1:8000';
+    const API_BASE = window.location.origin.includes('http') ? window.location.origin : 'http://127.0.0.1:8000';
     let isListening = false;
     let isSpeaking = false;
     let handsFreeMode = true;
@@ -295,6 +298,7 @@
     const liveStatusBadge = document.getElementById('liveStatusBadge');
     const toggleHandsFree = document.getElementById('toggleHandsFree');
     const voiceSelect = document.getElementById('voiceSelect');
+    const manualInput = document.getElementById('manualInput');
 
     // Initialize Handsfree Toggle
     toggleHandsFree.addEventListener('click', () => {
@@ -314,9 +318,7 @@
     function isJunkOrEcho(text) {
       if (!text || text.trim().length < 2) return true;
       const clean = text.trim();
-      // Filter out pure numbers or short noise like '030', '30224030'
       if (/^[0-9\s,.-]+$/.test(clean)) return true;
-      // Filter out duplicate triggers within 2.5 seconds
       const now = Date.now();
       if (clean.toLowerCase() === lastProcessedText.toLowerCase() && (now - lastProcessedTime) < 2500) {
         return true;
@@ -346,10 +348,7 @@
       };
 
       recognition.onresult = (event) => {
-        if (isSpeaking) {
-          console.log('Ignored utterance during speech playback');
-          return;
-        }
+        if (isSpeaking) return;
         const lastIndex = event.results.length - 1;
         const rawText = event.results[lastIndex][0].transcript;
         const text = rawText ? rawText.trim() : '';
@@ -359,13 +358,11 @@
           lastProcessedTime = Date.now();
           liveTranscript.textContent = `«${text}»`;
           processVoiceCommand(text);
-        } else {
-          console.log('Filtered noise/echo:', text);
         }
       };
 
       recognition.onerror = (event) => {
-        console.warn('Speech recognition event:', event.error);
+        console.warn('Speech recognition error:', event.error);
         if (event.error === 'not-allowed') {
           liveTranscript.textContent = "Mikrofonga ruxsat berilmadi. Iltimos brauzerda ruxsat bering.";
           updateUIState('idle');
@@ -405,7 +402,6 @@
 
     micBtn.addEventListener('click', () => {
       if (isSpeaking) {
-        // Stop current audio playback immediately
         ttsAudio.pause();
         ttsAudio.currentTime = 0;
         isSpeaking = false;
@@ -469,7 +465,6 @@
         if (data.success) {
           aiResponseText.textContent = data.speech_response;
           
-          // Play Ultra-Realistic Neural Audio with Anti-Feedback Muting
           if (data.audio_base64) {
             playNeuralAudio(data.audio_base64);
           } else {
@@ -484,11 +479,20 @@
       }
     }
 
+    function handleManualSubmit(e) {
+      e.preventDefault();
+      const val = manualInput.value.trim();
+      if (val) {
+        liveTranscript.textContent = `«${val}»`;
+        processVoiceCommand(val);
+        manualInput.value = '';
+      }
+    }
+
     function playNeuralAudio(base64Data) {
       isSpeaking = true;
       updateUIState('speaking');
       
-      // Stop recognition IMMEDIATELY to prevent mic hearing speaker output!
       if (recognition) {
         try { recognition.abort(); } catch(e){}
       }
@@ -502,7 +506,6 @@
 
       ttsAudio.onended = () => {
         isSpeaking = false;
-        // Wait 500ms debounce buffer so room echo dissipates before mic restarts
         setTimeout(() => {
           if (handsFreeMode && !isSpeaking) {
             startListening();
@@ -594,7 +597,6 @@
       fetchSystemStatus();
       setInterval(fetchSystemStatus, 10000);
       
-      // Auto-start handsfree listening mode
       setTimeout(() => {
         if (handsFreeMode) startListening();
       }, 800);

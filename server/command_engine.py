@@ -1,36 +1,102 @@
+import os
 import re
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from server.system_actions import SystemActionExecutor
+
+CYRILLIC_TO_LATIN = {
+    'а':'a', 'б':'b', 'в':'v', 'г':'g', 'д':'d', 'е':'e', 'ё':'yo', 'ж':'j',
+    'з':'z', 'и':'i', 'й':'y', 'к':'k', 'л':'l', 'м':'m', 'н':'n', 'о':'o',
+    'п':'p', 'р':'r', 'с':'s', 'т':'t', 'у':'u', 'ф':'f', 'х':'x', 'ҳ':'h',
+    'ч':'ch', 'ш':'sh', 'щ':'sh', 'ъ':'', 'ы':'i', 'ь':'', 'э':'e', 'ю':'yu',
+    'я':'ya', 'ў':'o\'', 'ғ':'g\''
+}
+
+def normalize_uzbek(text: str) -> str:
+    text = text.lower().strip()
+    for c, l in CYRILLIC_TO_LATIN.items():
+        text = text.replace(c, l)
+    text = text.replace('‘', "'").replace('’', "'").replace('`', "'")
+    text = re.sub(r'[^a-z0-9\s\'\+\-\*/=]', ' ', text)
+    return re.sub(r'\s+', ' ', text).strip()
 
 class JasperVoiceCommandEngine:
     def __init__(self):
         self.executor = SystemActionExecutor()
 
-    def parse_and_execute(self, voice_text: str) -> Dict[str, Any]:
-        t = voice_text.lower().strip()
+    def _eval_math(self, text: str) -> Optional[str]:
+        # Ko'paytirish (a * b)
+        m = re.search(r'(\d+)\s*(?:ni|ta)?\s*(\d+)\s*(?:ga|bilan)?\s*(?:ko\'paytir|kopaytir|zarb|karra)', text)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2))
+            return f"{a} ni {b} ga ko'paytirganda {a * b} bo'ladi."
+        
+        # Bo'lish (a / b)
+        m = re.search(r'(\d+)\s*(?:ni|ta)?\s*(\d+)\s*(?:ga)?\s*(?:bo\'l|bol|taqsim)', text)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2))
+            if b != 0:
+                res = round(a / b, 2)
+                return f"{a} ni {b} ga bo'lganda {res} chiqadi."
 
-        # 1. Kalkulyator
-        if any(w in t for w in ["kalkulyator", "hisoblagich", "calculator", "калькулятор", "hisobla"]):
+        # Qo'shish (a + b)
+        m = re.search(r'(\d+)\s*(?:ga|bilan)?\s*(\d+)\s*(?:ni|ta)?\s*(?:qo\'sh|qosh|plus)', text)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2))
+            return f"{a} ga {b} ni qo'shganda {a + b} bo'ladi."
+
+        # Ayirish (a - b)
+        m = re.search(r'(\d+)\s*(?:dan)?\s*(\d+)\s*(?:ni|ta)?\s*(?:ayir|ol|minus)', text)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2))
+            return f"{a} dan {b} ni ayirganda {a - b} qoladi."
+        
+        return None
+
+    def parse_and_execute(self, raw_text: str, custom_api_key: Optional[str] = None) -> Dict[str, Any]:
+        norm = normalize_uzbek(raw_text)
+
+        # 1. Matematik hisob-kitoblar (Math Engine)
+        math_res = self._eval_math(norm)
+        if math_res:
+            return {
+                "intent": "MATH_CALCULATION",
+                "action": "math",
+                "speech_response": math_res,
+                "details": {"query": raw_text, "result": math_res}
+            }
+
+        # 2. Telegram (Desktop / Web)
+        if any(w in norm for w in ["telegram", "telega", "tg", "tlg"]):
+            res = self.executor.open_app("telegram")
+            return {
+                "intent": "OPEN_APP",
+                "action": "telegram",
+                "speech_response": "Telegram ilovasini ochdim, xo'jayin!",
+                "details": res
+            }
+
+        # 3. Kalkulyator
+        if any(w in norm for w in ["kalkulyator", "hisoblagich", "calculator", "calc", "hisobla"]):
             res = self.executor.open_app("kalkulyator")
             return {
                 "intent": "OPEN_APP",
                 "action": "calc",
-                "speech_response": "Kalkulyator dasturini ochdim, xo'jayin!",
+                "speech_response": "Kalkulyator dasturi ochildi!",
                 "details": res
             }
 
-        # 2. Bloknot / Notepad
-        if any(w in t for w in ["bloknot", "notepad", "yozuv daftari", "блокнот", "matn"]):
+        # 4. Bloknot / Notepad
+        if any(w in norm for w in ["bloknot", "notepad", "yozuv daftari", "matn muharriri", "daftar"]):
             res = self.executor.open_app("notepad")
             return {
                 "intent": "OPEN_APP",
                 "action": "notepad",
-                "speech_response": "Bloknot matn muharriri ochildi!",
+                "speech_response": "Bloknot dasturi ochildi.",
                 "details": res
             }
 
-        # 3. Fayllar / Explorer / Papka
-        if any(w in t for w in ["fayllar", "provodnik", "papka", "explorer", "проводник", "kompyuterim"]):
+        # 5. Explorer / Fayllar / Papkalar
+        if any(w in norm for w in ["fayllar", "provodnik", "papka", "explorer", "kompyuterim", "mening kompyuterim"]):
             res = self.executor.open_app("explorer")
             return {
                 "intent": "OPEN_APP",
@@ -39,48 +105,48 @@ class JasperVoiceCommandEngine:
                 "details": res
             }
 
-        # 4. Chrome / Brauzer
-        if any(w in t for w in ["chrome", "xrom", "brauzer", "browser", "хром", "internet"]):
+        # 6. Brauzer / Google Chrome
+        if any(w in norm for w in ["chrome", "xrom", "brauzer", "browser", "internet"]):
             res = self.executor.open_app("chrome")
             return {
                 "intent": "OPEN_APP",
                 "action": "chrome",
-                "speech_response": "Internet brauzeri ochildi!",
+                "speech_response": "Google Chrome brauzeri ochildi!",
                 "details": res
             }
 
-        # 5. Telegram
-        if any(w in t for w in ["telegram", "telega", "tg", "телеграм"]):
-            res = self.executor.open_app("telegram")
-            return {
-                "intent": "OPEN_APP",
-                "action": "telegram",
-                "speech_response": "Telegram ochildi, xizmatingizdaman!",
-                "details": res
-            }
-
-        # 6. VS Code / Kod muharriri
-        if any(w in t for w in ["vscode", "vs code", "kod", "dasturlash", "kodni och"]):
+        # 7. VS Code / Dasturlash muhiti
+        if any(w in norm for w in ["vscode", "vs code", "code", "kod", "dasturlash"]):
             res = self.executor.open_app("vscode")
             return {
                 "intent": "OPEN_APP",
                 "action": "vscode",
-                "speech_response": "Visual Studio Code dasturlash muhiti ochildi!",
+                "speech_response": "Visual Studio Code ochildi!",
                 "details": res
             }
 
-        # 7. Terminal / CMD
-        if any(w in t for w in ["terminal", "powershell", "cmd", "konsol", "buyruqlar satri"]):
+        # 8. Terminal / Konsol
+        if any(w in norm for w in ["terminal", "powershell", "cmd", "konsol"]):
             res = self.executor.open_app("terminal")
             return {
                 "intent": "OPEN_APP",
                 "action": "terminal",
-                "speech_response": "Terminal konsoli ishga tushirildi.",
+                "speech_response": "Terminal konsoli ochildi.",
                 "details": res
             }
 
-        # 8. GitHub
-        if any(w in t for w in ["github", "git xab", "git hub", "git", "гитхаб"]):
+        # 9. YouTube
+        if any(w in norm for w in ["youtube", "yutub", "video", "videolar"]):
+            res = self.executor.open_website("https://youtube.com", "YouTube")
+            return {
+                "intent": "OPEN_WEBSITE",
+                "action": "youtube",
+                "speech_response": "YouTube ochilmoqda!",
+                "details": res
+            }
+
+        # 10. GitHub
+        if any(w in norm for w in ["github", "git", "git xab", "git hub"]):
             res = self.executor.open_website("https://github.com/salomh46-rgb", "GitHub Profilingiz")
             return {
                 "intent": "OPEN_WEBSITE",
@@ -89,18 +155,8 @@ class JasperVoiceCommandEngine:
                 "details": res
             }
 
-        # 9. YouTube
-        if any(w in t for w in ["youtube", "yutub", "yu tub", "видео", "ютуб"]):
-            res = self.executor.open_website("https://youtube.com", "YouTube")
-            return {
-                "intent": "OPEN_WEBSITE",
-                "action": "youtube",
-                "speech_response": "YouTube platformasi ochilmoqda!",
-                "details": res
-            }
-
-        # 10. ChatGPT / Sun'iy Intellekt
-        if any(w in t for w in ["chatgpt", "chat gpt", "ai", "sun'iy intellekt", "chatbot"]):
+        # 11. ChatGPT
+        if any(w in norm for w in ["chatgpt", "chat gpt", "ai", "sun'iy intellekt", "chatbot"]):
             res = self.executor.open_website("https://chatgpt.com", "ChatGPT")
             return {
                 "intent": "OPEN_WEBSITE",
@@ -109,8 +165,8 @@ class JasperVoiceCommandEngine:
                 "details": res
             }
 
-        # 11. Shaxsiy Portfolio
-        if any(w in t for w in ["portfolio", "portfolyo", "saytim", "shaxsiy sayt", "портфолио"]):
+        # 12. Shaxsiy Portfolio
+        if any(w in norm for w in ["portfolio", "portfolyo", "saytim", "shaxsiy sayt"]):
             res = self.executor.open_website("https://javohirbek-portfolio.vercel.app", "Shaxsiy Portfolio")
             return {
                 "intent": "OPEN_WEBSITE",
@@ -119,20 +175,20 @@ class JasperVoiceCommandEngine:
                 "details": res
             }
 
-        # 12. Disk / Xotira holati (Disk status)
-        if any(w in t for w in ["disk", "xotira", "joy", "qancha joy", "c disk", "d disk", "память", "диск"]):
+        # 13. Disk xotirasi (Audit)
+        if any(w in norm for w in ["disk", "xotira", "joy", "qancha joy", "c disk", "d disk"]):
             stats = self.executor.get_disk_stats()
             c_free = stats.get("C", {}).get("free_gb", 0)
             d_free = stats.get("D", {}).get("free_gb", 0)
             return {
                 "intent": "SYSTEM_AUDIT",
                 "action": "disk_status",
-                "speech_response": f"C diskda {c_free} gigabayt, D diskda esa {d_free} gigabayt bo'sh joy mavjud, xo'jayin!",
+                "speech_response": f"C diskda {c_free} gigabayt, D diskda esa {d_free} gigabayt bo'sh joy bor, xo'jayin!",
                 "details": stats
             }
 
-        # 13. Loyihalar ro'yxati (Projects)
-        if any(w in t for w in ["loyiha", "proyekt", "loyihalar", "nimalar bor", "proyektlar", "proyektlarim", "проекты"]):
+        # 14. Loyihalar
+        if any(w in norm for w in ["loyiha", "proyekt", "loyihalar", "nimalar bor", "proyektlar"]):
             projs = self.executor.list_projects()
             count = len(projs)
             sample = ", ".join(projs[:4])
@@ -143,29 +199,29 @@ class JasperVoiceCommandEngine:
                 "details": {"total": count, "projects": projs}
             }
 
-        # 14. Internetdan qidirish (Web Search)
-        search_match = re.search(r"(?:qidir|izla|topib ber|haqida ma'lumot|search)\s+(.+)", t)
+        # 15. Internetdan qidiruv (Search)
+        search_match = re.search(r"(?:qidir|izla|topib ber|haqida ma\'lumot|haqida|kim|nima)\s+(.+)", norm)
         if search_match:
             query = search_match.group(1).strip()
             res = self.executor.search_web(query)
             return {
                 "intent": "SEARCH_WEB",
                 "action": "search",
-                "speech_response": f"Google orqali «{query}» qidirilmoqda.",
+                "speech_response": f"Google orqali «{query}» bo'yicha qidiruv natijalarini ochdim.",
                 "details": res
             }
 
-        # 15. Salomlashish / Hol-ahvol
-        if any(w in t for w in ["salom", "qalesan", "qalaysan", "ishlar", "nima gap", "привет", "здравствуй", "assalom"]):
+        # 16. Salomlashish
+        if any(w in norm for w in ["salom", "qalesan", "qalaysan", "ishlar", "nima gap", "assalom"]):
             return {
                 "intent": "GREETING",
                 "action": "greeting",
-                "speech_response": "Assalomu alaykum, xo'jayin! Men buyruqlaringizni bajarishga 100% tayyorman. Nima xizmat?",
+                "speech_response": "Assalomu alaykum xo'jayin! Buyruqlaringizni bajarishga to'liq tayyorman.",
                 "details": {}
             }
 
-        # 16. Tashakkur / Rahmat
-        if any(w in t for w in ["rahmat", "raxmat", "tashakkur", "barakalla", "spasibo", "malades"]):
+        # 17. Minnatdorchilik
+        if any(w in norm for w in ["rahmat", "raxmat", "tashakkur", "barakalla", "malades"]):
             return {
                 "intent": "THANKS",
                 "action": "thanks",
@@ -173,10 +229,40 @@ class JasperVoiceCommandEngine:
                 "details": {}
             }
 
-        # 17. Umumiy intellektual javob (General inquiry fallback)
+        # 18. Qobiliyatlar / Nima qila olasan
+        if any(w in norm for w in ["nima qilasan", "nima qila olasan", "imkoniyat", "nimalarni bilasan", "yordam"]):
+            return {
+                "intent": "HELP_CAPABILITIES",
+                "action": "capabilities",
+                "speech_response": "Men kompyuteringizdagi istalgan dasturlarni ochaman, Telegram, Kalkulyator, YouTube-ga kiraman, disk xotirasini aytaman, hisob-kitob qilaman va buyruqlaringizni bajaraman!",
+                "details": {}
+            }
+
+        # 19. Gemini AI Fallback (if API key available) or Conversational fallback
+        api_key = custom_api_key or os.environ.get("GEMINI_API_KEY")
+        if api_key:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                sys_prompt = "Sen 'Jasper AI' nomli o'zbekcha aqlli shaxsiy kompyuter yordamchisisan. Foydalanuvchi bilan o'zbek tilida qisqa, aniq, odobli va jonli gaplash. Maksimal 2 jumla bilan javob ber."
+                prompt = f"{sys_prompt}\n\nFoydalanuvchi: {raw_text}\nJasper AI:"
+                gemini_res = model.generate_content(prompt)
+                ai_text = gemini_res.text.strip()
+                if ai_text:
+                    return {
+                        "intent": "GEMINI_AI_REASONING",
+                        "action": "ai_response",
+                        "speech_response": ai_text,
+                        "details": {"raw_query": raw_text}
+                    }
+            except Exception as e:
+                print(f"Gemini AI error: {e}")
+
+        # 20. Umumiy Aqlli Qabul Qilish (Conversational fallback)
         return {
             "intent": "GENERAL_ASSISTANT",
             "action": "answer",
-            "speech_response": f"«{voice_text}» buyrug'ingiz qabul qilindi. Bajarishga tayyorman!",
-            "details": {"raw_query": voice_text}
+            "speech_response": f"«{raw_text}» buyrug'ingizni qabul qildim. Kompyuteringizda har qanday vazifani bajarishga tayyorman!",
+            "details": {"raw_query": raw_text}
         }
