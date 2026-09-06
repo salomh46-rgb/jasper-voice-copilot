@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import edge_tts
 
@@ -31,6 +32,7 @@ app.add_middleware(
 engine = JasperVoiceCommandEngine()
 executor = SystemActionExecutor()
 DB_FILE = os.path.join(os.path.dirname(__file__), "copilot_history.db")
+CLIENT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "client")
 
 DEFAULT_VOICE = "uz-UZ-SardorNeural"
 
@@ -70,13 +72,13 @@ class VoiceInputRequest(BaseModel):
     voice: Optional[str] = DEFAULT_VOICE
 
 @app.get("/")
-def read_root():
+def serve_index():
+    index_path = os.path.join(CLIENT_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
     return {
         "status": "active",
-        "service": "Jasper AI — Live Voice Copilot 2.0",
-        "version": "2.0.0",
-        "developer": "Javohirbek Asqarov (Jasper)",
-        "features": ["Neural Uzbek Human Voice", "Continuous Hands-free Listening", "Smart App Launcher"]
+        "service": "Jasper AI — Live Voice Copilot 2.0"
     }
 
 @app.post("/api/voice/process")

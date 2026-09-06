@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import shutil
 import subprocess
 import webbrowser
@@ -7,6 +8,30 @@ import urllib.parse
 from typing import Dict, Any, List, Optional
 
 class SystemActionExecutor:
+    _cached_apps: Dict[str, str] = {}
+
+    @classmethod
+    def _load_start_apps(cls):
+        try:
+            cmd = ['powershell', '-NoProfile', '-Command', '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-StartApps | ConvertTo-Json']
+            p = subprocess.run(cmd, capture_output=True, timeout=10)
+            if p.returncode == 0 and p.stdout:
+                data = json.loads(p.stdout.decode('utf-8', errors='ignore'))
+                if isinstance(data, list):
+                    for item in data:
+                        name = item.get("Name", "").lower()
+                        appid = item.get("AppID", "")
+                        if name and appid:
+                            cls._cached_apps[name] = appid
+        except Exception as e:
+            print(f"Error loading start apps: {e}")
+
+    @classmethod
+    def get_start_apps(cls) -> Dict[str, str]:
+        if not cls._cached_apps:
+            cls._load_start_apps()
+        return cls._cached_apps
+
     @staticmethod
     def get_disk_stats() -> Dict[str, Any]:
         stats = {}
@@ -28,142 +53,106 @@ class SystemActionExecutor:
             return sorted([f for f in os.listdir(p_dir) if os.path.isdir(os.path.join(p_dir, f))])
         return []
 
-    @staticmethod
-    def _find_telegram_path() -> Optional[str]:
-        candidates = [
-            os.path.expandvars(r"%APPDATA%\Telegram Desktop\Telegram.exe"),
-            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Telegram Desktop\Telegram.exe"),
-            os.path.expandvars(r"%PROGRAMFILES%\Telegram Desktop\Telegram.exe"),
-            os.path.expandvars(r"%PROGRAMFILES(X86)%\Telegram Desktop\Telegram.exe"),
-        ]
-        for c in candidates:
-            if os.path.exists(c):
-                return c
-        return None
-
-    @staticmethod
-    def _find_chrome_path() -> Optional[str]:
-        candidates = [
-            os.path.expandvars(r"%PROGRAMFILES%\Google\Chrome\Application\chrome.exe"),
-            os.path.expandvars(r"%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe"),
-            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
-            os.path.expandvars(r"%PROGRAMFILES(X86)%\Microsoft\Edge\Application\msedge.exe"),
-            os.path.expandvars(r"%PROGRAMFILES%\Microsoft\Edge\Application\msedge.exe"),
-        ]
-        for c in candidates:
-            if os.path.exists(c):
-                return c
-        return None
-
-    @staticmethod
-    def _find_vscode_path() -> Optional[str]:
-        candidates = [
-            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe"),
-            os.path.expandvars(r"%PROGRAMFILES%\Microsoft VS Code\Code.exe"),
-            os.path.expandvars(r"%PROGRAMFILES(X86)%\Microsoft VS Code\Code.exe"),
-        ]
-        for c in candidates:
-            if os.path.exists(c):
-                return c
-        if shutil.which("code"):
-            return "code"
-        return None
-
-    @staticmethod
-    def open_app(app_name: str) -> Dict[str, Any]:
+    @classmethod
+    def open_app(cls, app_name: str) -> Dict[str, Any]:
         app_key = app_name.lower().strip()
-        
-        # 1. Calculator
-        if app_key in ["calculator", "kalkulyator", "hisoblagich", "calc"]:
+        apps_map = cls.get_start_apps()
+
+        # 1. Telegram Desktop (Store or Win32)
+        if any(k in app_key for k in ["telegram", "telega", "tg", "телеграм"]):
+            for name, appid in apps_map.items():
+                if "telegram" in name:
+                    try:
+                        subprocess.Popen(["explorer.exe", f"shell:AppsFolder\{appid}"])
+                        return {"success": True, "app": "Telegram Desktop", "message": "Telegram Desktop ilovasi ochildi."}
+                    except Exception:
+                        pass
+            # Fallback to telegram URL protocol or web
+            try:
+                os.startfile("tg://")
+                return {"success": True, "app": "Telegram Desktop", "message": "Telegram ilovasi ochildi."}
+            except Exception:
+                webbrowser.open("https://web.telegram.org")
+                return {"success": True, "app": "Telegram Web", "message": "Telegram ochildi."}
+
+        # 2. Google Chrome / Brauzer
+        if any(k in app_key for k in ["chrome", "xrom", "brauzer", "browser", "хром"]):
+            for name, appid in apps_map.items():
+                if "chrome" in name:
+                    try:
+                        subprocess.Popen(["explorer.exe", f"shell:AppsFolder\{appid}"])
+                        return {"success": True, "app": "Google Chrome", "message": "Google Chrome brauzeri ochildi."}
+                    except Exception:
+                        pass
+            webbrowser.open("https://google.com")
+            return {"success": True, "app": "Brauzer", "message": "Internet brauzeri ochildi."}
+
+        # 3. Visual Studio Code
+        if any(k in app_key for k in ["vscode", "vs code", "code", "kod", "dasturlash"]):
+            for name, appid in apps_map.items():
+                if "visual studio code" in name or "code" == name:
+                    try:
+                        subprocess.Popen(["explorer.exe", f"shell:AppsFolder\{appid}"])
+                        return {"success": True, "app": "VS Code", "message": "Visual Studio Code dasturi ochildi."}
+                    except Exception:
+                        pass
+
+        # 4. Calculator / Kalkulyator
+        if any(k in app_key for k in ["calculator", "kalkulyator", "hisoblagich", "calc"]):
+            for name, appid in apps_map.items():
+                if "calculator" in name or "kalkulyator" in name:
+                    try:
+                        subprocess.Popen(["explorer.exe", f"shell:AppsFolder\{appid}"])
+                        return {"success": True, "app": "Kalkulyator", "message": "Kalkulyator dasturi ochildi."}
+                    except Exception:
+                        pass
             try:
                 subprocess.Popen(["calc.exe"])
                 return {"success": True, "app": "Kalkulyator", "message": "Kalkulyator dasturi ochildi."}
             except Exception as e:
-                return {"success": False, "app": "Kalkulyator", "error": str(e)}
+                return {"success": False, "error": str(e)}
 
-        # 2. Notepad / Bloknot
-        if app_key in ["notepad", "bloknot", "matn"]:
+        # 5. Notepad / Bloknot
+        if any(k in app_key for k in ["notepad", "bloknot", "matn"]):
+            for name, appid in apps_map.items():
+                if "notepad" in name or "bloknot" in name:
+                    try:
+                        subprocess.Popen(["explorer.exe", f"shell:AppsFolder\{appid}"])
+                        return {"success": True, "app": "Bloknot", "message": "Bloknot dasturi ochildi."}
+                    except Exception:
+                        pass
             try:
                 subprocess.Popen(["notepad.exe"])
-                return {"success": True, "app": "Bloknot", "message": "Bloknot matn muharriri ochildi."}
+                return {"success": True, "app": "Bloknot", "message": "Bloknot dasturi ochildi."}
             except Exception as e:
-                return {"success": False, "app": "Bloknot", "error": str(e)}
+                return {"success": False, "error": str(e)}
 
-        # 3. Explorer / Fayllar
-        if app_key in ["explorer", "fayllar", "papka", "kompyuter", "provodnik"]:
+        # 6. Explorer / Fayllar
+        if any(k in app_key for k in ["explorer", "fayllar", "papka", "kompyuter"]):
             try:
                 subprocess.Popen(["explorer.exe"])
                 return {"success": True, "app": "Explorer", "message": "Fayllar menejeri ochildi."}
             except Exception as e:
-                return {"success": False, "app": "Explorer", "error": str(e)}
+                return {"success": False, "error": str(e)}
 
-        # 4. Terminal / PowerShell / Cmd
-        if app_key in ["terminal", "powershell", "cmd", "konsol"]:
+        # 7. Terminal / PowerShell / CMD
+        if any(k in app_key for k in ["terminal", "powershell", "cmd", "konsol"]):
             try:
                 subprocess.Popen(["powershell.exe"])
-                return {"success": True, "app": "PowerShell Terminal", "message": "PowerShell terminali ochildi."}
+                return {"success": True, "app": "Terminal", "message": "PowerShell terminali ochildi."}
             except Exception as e:
-                return {"success": False, "app": "Terminal", "error": str(e)}
+                return {"success": False, "error": str(e)}
 
-        # 5. Chrome / Brauzer
-        if app_key in ["chrome", "brauzer", "browser", "internet", "edge"]:
-            chrome_path = SystemActionExecutor._find_chrome_path()
-            if chrome_path:
+        # 8. Dynamic Search in all installed Apps
+        for name, appid in apps_map.items():
+            if app_key in name:
                 try:
-                    subprocess.Popen([chrome_path])
-                    return {"success": True, "app": "Brauzer", "message": "Internet brauzeri ochildi."}
+                    subprocess.Popen(["explorer.exe", f"shell:AppsFolder\{appid}"])
+                    return {"success": True, "app": name.title(), "message": f"{name.title()} dasturi ochildi."}
                 except Exception:
                     pass
-            webbrowser.open("https://google.com")
-            return {"success": True, "app": "Brauzer", "message": "Internet brauzeri ochildi."}
 
-        # 6. Telegram
-        if app_key in ["telegram", "telega", "tg"]:
-            tg_path = SystemActionExecutor._find_telegram_path()
-            if tg_path:
-                try:
-                    subprocess.Popen([tg_path])
-                    return {"success": True, "app": "Telegram Desktop", "message": "Telegram Desktop ilovasi ochildi."}
-                except Exception:
-                    pass
-            # Fallback to Telegram Web cleanly
-            webbrowser.open("https://web.telegram.org")
-            return {
-                "success": True,
-                "app": "Telegram Web",
-                "message": "Telegram ochildi."
-            }
-
-        # 7. VS Code
-        if app_key in ["vscode", "vs code", "kod", "dasturlash"]:
-            code_path = SystemActionExecutor._find_vscode_path()
-            if code_path:
-                try:
-                    subprocess.Popen([code_path])
-                    return {"success": True, "app": "VS Code", "message": "Visual Studio Code ochildi."}
-                except Exception:
-                    pass
-            webbrowser.open("https://github.com/salomh46-rgb")
-            return {"success": True, "app": "GitHub", "message": "GitHub loyihalaringiz ochildi."}
-
-        # 8. Paint
-        if app_key in ["paint", "rasm", "mspaint"]:
-            try:
-                subprocess.Popen(["mspaint.exe"])
-                return {"success": True, "app": "Paint", "message": "Paint rasm dasturi ochildi."}
-            except Exception as e:
-                return {"success": False, "app": "Paint", "error": str(e)}
-
-        # 9. Task Manager / Vazifalar menejeri
-        if app_key in ["taskmgr", "dispetcher", "vazifalar", "task manager"]:
-            try:
-                subprocess.Popen(["taskmgr.exe"])
-                return {"success": True, "app": "Task Manager", "message": "Vazifalar dispetcheri ochildi."}
-            except Exception as e:
-                return {"success": False, "app": "Task Manager", "error": str(e)}
-
-        # Fallback: try opening as website or generic search
-        return {"success": False, "app": app_name, "message": f"{app_name} dasturi tizimda topilmadi."}
+        return {"success": False, "app": app_name, "message": f"{app_name} kompyuteringizda topilmadi."}
 
     @staticmethod
     def open_website(url: str, site_name: str = "") -> Dict[str, Any]:
@@ -171,7 +160,7 @@ class SystemActionExecutor:
             if not url.startswith("http"):
                 url = "https://" + url
             webbrowser.open(url)
-            return {"success": True, "url": url, "site": site_name or url, "message": f"{site_name or url} sayti brauzerda ochildi."}
+            return {"success": True, "url": url, "site": site_name or url, "message": f"{site_name or url} sahifasi ochildi."}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
