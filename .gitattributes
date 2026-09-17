@@ -1,0 +1,6 @@
+# Override GitHub Linguist detection to reflect actual Python FastAPI Architecture
+client/* linguist-vendored
+*.html linguist-detectable=false
+*.css linguist-detectable=false
+*.bat linguist-detectable=false
+server/*.py linguist-detectable=true
